@@ -1,0 +1,865 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>小时工工资计算器</title>
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --panel: #ffffff;
+      --ink: #18202a;
+      --muted: #657282;
+      --line: #dce2ea;
+      --soft: #eef3f7;
+      --accent: #146c62;
+      --accent-2: #b33d2e;
+      --focus: #d8efe9;
+      --shadow: 0 10px 30px rgba(24, 32, 42, 0.08);
+      --radius: 8px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      letter-spacing: 0;
+    }
+
+    button,
+    input,
+    select {
+      font: inherit;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
+    .app {
+      width: min(1180px, 100%);
+      margin: 0 auto;
+      padding: 18px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(24px, 4vw, 36px);
+      line-height: 1.12;
+      font-weight: 760;
+    }
+
+    .subtitle {
+      margin: 7px 0 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .action-row {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    .btn {
+      min-height: 42px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+      color: var(--ink);
+      padding: 0 14px;
+      font-weight: 680;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      white-space: nowrap;
+    }
+
+    .btn.primary {
+      border-color: var(--accent);
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .btn.danger {
+      border-color: #eed7d2;
+      color: var(--accent-2);
+    }
+
+    .btn:focus,
+    input:focus,
+    select:focus {
+      outline: 3px solid var(--focus);
+      outline-offset: 1px;
+    }
+
+    .toolbar {
+      display: grid;
+      grid-template-columns: 1.1fr repeat(3, minmax(150px, 0.7fr)) minmax(180px, 0.7fr);
+      gap: 10px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 12px;
+      box-shadow: var(--shadow);
+      margin-bottom: 14px;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    label,
+    .field-label {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 720;
+    }
+
+    input,
+    select {
+      width: 100%;
+      min-height: 42px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #fff;
+      color: var(--ink);
+      padding: 0 10px;
+    }
+
+    input[type="checkbox"] {
+      width: 20px;
+      min-height: 20px;
+      accent-color: var(--accent);
+    }
+
+    .checkline {
+      min-height: 42px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 0 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: #fff;
+      color: var(--ink);
+      font-weight: 650;
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .metric {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 12px;
+      min-height: 82px;
+    }
+
+    .metric span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 720;
+      margin-bottom: 8px;
+    }
+
+    .metric strong {
+      display: block;
+      font-size: 23px;
+      line-height: 1.1;
+    }
+
+    .sheet-wrap {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      overflow: hidden;
+      box-shadow: var(--shadow);
+    }
+
+    .table-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 12px;
+      border-bottom: 1px solid var(--line);
+      background: #fbfcfd;
+    }
+
+    .table-title {
+      font-weight: 780;
+    }
+
+    .quick-fill {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      justify-content: flex-end;
+    }
+
+    .quick-fill select {
+      width: 118px;
+    }
+
+    .table-scroll {
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      min-width: 840px;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+
+    th,
+    td {
+      border-bottom: 1px solid var(--line);
+      padding: 8px;
+      text-align: left;
+      vertical-align: middle;
+      font-size: 14px;
+    }
+
+    th {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      background: #f7fafb;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 780;
+    }
+
+    tbody tr.resting {
+      background: #fbf1ef;
+    }
+
+    tbody tr.weekend:not(.resting) {
+      background: #f8fbff;
+    }
+
+    td select,
+    td input {
+      min-height: 38px;
+    }
+
+    .date-cell {
+      font-weight: 760;
+    }
+
+    .weekday {
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 2px;
+    }
+
+    .money,
+    .hours {
+      font-variant-numeric: tabular-nums;
+      font-weight: 760;
+    }
+
+    .note {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+      padding: 10px 12px 12px;
+      background: #fbfcfd;
+    }
+
+    .mobile-list {
+      display: none;
+    }
+
+    @media (max-width: 900px) {
+      .app {
+        padding: 12px;
+      }
+
+      .topbar {
+        display: block;
+      }
+
+      .action-row {
+        justify-content: stretch;
+        margin-top: 12px;
+      }
+
+      .action-row .btn {
+        flex: 1 1 140px;
+      }
+
+      .toolbar {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .summary {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .table-head {
+        align-items: stretch;
+        flex-direction: column;
+      }
+
+      .quick-fill {
+        justify-content: stretch;
+      }
+
+      .quick-fill select,
+      .quick-fill .btn {
+        flex: 1 1 120px;
+      }
+    }
+
+    @media (max-width: 640px) {
+      h1 {
+        font-size: 27px;
+      }
+
+      .toolbar,
+      .summary {
+        grid-template-columns: 1fr;
+      }
+
+      .table-scroll {
+        display: none;
+      }
+
+      .mobile-list {
+        display: grid;
+        gap: 10px;
+        padding: 10px;
+        background: var(--soft);
+      }
+
+      .day-card {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 10px;
+      }
+
+      .day-card.resting {
+        border-color: #efd3ce;
+        background: #fff8f7;
+      }
+
+      .day-card-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 10px;
+      }
+
+      .day-card-title {
+        font-weight: 780;
+      }
+
+      .day-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+      }
+
+      .day-total {
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        border-top: 1px solid var(--line);
+        margin-top: 10px;
+        padding-top: 10px;
+        font-weight: 760;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="topbar">
+      <div>
+        <h1>小时工工资计算器</h1>
+        <p class="subtitle">按员工、月份、上下班时间和交通补贴计算工资，一键导出 Excel。</p>
+      </div>
+      <div class="action-row">
+        <button class="btn" id="saveEmployeeBtn" type="button">新增员工</button>
+        <button class="btn danger" id="deleteEmployeeBtn" type="button">删除员工</button>
+        <button class="btn primary" id="exportBtn" type="button">导出 Excel</button>
+      </div>
+    </section>
+
+    <section class="toolbar" aria-label="工资设置">
+      <div class="field">
+        <label for="employeeSelect">员工</label>
+        <select id="employeeSelect"></select>
+      </div>
+      <div class="field">
+        <label for="employeeName">员工姓名</label>
+        <input id="employeeName" type="text" placeholder="例如：张三">
+      </div>
+      <div class="field">
+        <label for="hourlyRate">时薪</label>
+        <input id="hourlyRate" type="number" min="0" step="0.01" inputmode="decimal" value="25">
+      </div>
+      <div class="field">
+        <label for="monthInput">月份</label>
+        <input id="monthInput" type="month">
+      </div>
+      <div class="field">
+        <span class="field-label">每日交通补贴</span>
+        <label class="checkline">
+          <input id="transportEnabled" type="checkbox">
+          <span>启用</span>
+        </label>
+      </div>
+      <div class="field">
+        <label for="transportAmount">补贴金额</label>
+        <input id="transportAmount" type="number" min="0" step="0.01" inputmode="decimal" value="0">
+      </div>
+    </section>
+
+    <section class="summary" aria-label="当月汇总">
+      <div class="metric"><span>出勤天数</span><strong id="workDays">0</strong></div>
+      <div class="metric"><span>总工时</span><strong id="totalHours">0.0</strong></div>
+      <div class="metric"><span>交通补贴</span><strong id="transportTotal">¥0.00</strong></div>
+      <div class="metric"><span>当月工资</span><strong id="payTotal">¥0.00</strong></div>
+    </section>
+
+    <section class="sheet-wrap">
+      <div class="table-head">
+        <div class="table-title" id="sheetTitle">排班明细</div>
+        <div class="quick-fill">
+          <select id="bulkStart" aria-label="批量上班时间"></select>
+          <select id="bulkEnd" aria-label="批量下班时间"></select>
+          <button class="btn" id="fillWorkdaysBtn" type="button">填工作日</button>
+          <button class="btn" id="clearRestBtn" type="button">全月休息</button>
+        </div>
+      </div>
+      <div class="table-scroll" aria-label="桌面排班表">
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 130px;">日期</th>
+              <th style="width: 82px;">休息</th>
+              <th style="width: 130px;">上班</th>
+              <th style="width: 130px;">下班</th>
+              <th style="width: 110px;">工时</th>
+              <th style="width: 120px;">交通补贴</th>
+              <th style="width: 130px;">当日工资</th>
+              <th>备注</th>
+            </tr>
+          </thead>
+          <tbody id="timesheetBody"></tbody>
+        </table>
+      </div>
+      <div class="mobile-list" id="mobileList" aria-label="手机排班表"></div>
+      <div class="note">时间以 30 分钟为间隔。勾选休息后，当天工时、交通补贴和工资都会按 0 计算。</div>
+    </section>
+  </main>
+
+  <script>
+    const STORAGE_KEY = "hourly-pay-calculator-v1";
+    const weekdays = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+    const money = new Intl.NumberFormat("zh-CN", { style: "currency", currency: "CNY" });
+
+    const state = {
+      employees: [],
+      activeId: "",
+      month: "",
+      rows: []
+    };
+
+    const el = {
+      employeeSelect: document.getElementById("employeeSelect"),
+      employeeName: document.getElementById("employeeName"),
+      hourlyRate: document.getElementById("hourlyRate"),
+      monthInput: document.getElementById("monthInput"),
+      transportEnabled: document.getElementById("transportEnabled"),
+      transportAmount: document.getElementById("transportAmount"),
+      saveEmployeeBtn: document.getElementById("saveEmployeeBtn"),
+      deleteEmployeeBtn: document.getElementById("deleteEmployeeBtn"),
+      exportBtn: document.getElementById("exportBtn"),
+      workDays: document.getElementById("workDays"),
+      totalHours: document.getElementById("totalHours"),
+      transportTotal: document.getElementById("transportTotal"),
+      payTotal: document.getElementById("payTotal"),
+      sheetTitle: document.getElementById("sheetTitle"),
+      timesheetBody: document.getElementById("timesheetBody"),
+      mobileList: document.getElementById("mobileList"),
+      bulkStart: document.getElementById("bulkStart"),
+      bulkEnd: document.getElementById("bulkEnd"),
+      fillWorkdaysBtn: document.getElementById("fillWorkdaysBtn"),
+      clearRestBtn: document.getElementById("clearRestBtn")
+    };
+
+    function monthNow() {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    }
+
+    function uid() {
+      return `emp-${Date.now()}-${Math.round(Math.random() * 10000)}`;
+    }
+
+    function timeOptions() {
+      const options = [];
+      for (let h = 0; h < 24; h += 1) {
+        for (let m = 0; m < 60; m += 30) {
+          options.push(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
+        }
+      }
+      return options;
+    }
+
+    const times = timeOptions();
+
+    function buildTimeSelect(value, index, field) {
+      return `<select data-index="${index}" data-field="${field}">
+        ${times.map((time) => `<option value="${time}" ${time === value ? "selected" : ""}>${time}</option>`).join("")}
+      </select>`;
+    }
+
+    function minutes(value) {
+      const [h, m] = value.split(":").map(Number);
+      return h * 60 + m;
+    }
+
+    function calcRow(row) {
+      if (row.rest) return { hours: 0, transport: 0, dayPay: 0 };
+      const start = minutes(row.start);
+      const end = minutes(row.end);
+      const rawHours = Math.max(0, (end - start) / 60);
+      const transport = el.transportEnabled.checked ? numberValue(el.transportAmount.value) : 0;
+      const dayPay = rawHours * numberValue(el.hourlyRate.value) + transport;
+      return { hours: rawHours, transport, dayPay };
+    }
+
+    function numberValue(value) {
+      const n = Number(value);
+      return Number.isFinite(n) ? n : 0;
+    }
+
+    function makeRows(month) {
+      const [year, monthIndex] = month.split("-").map(Number);
+      const days = new Date(year, monthIndex, 0).getDate();
+      const previous = new Map(state.rows.map((row) => [row.date, row]));
+      state.rows = Array.from({ length: days }, (_, i) => {
+        const date = `${month}-${String(i + 1).padStart(2, "0")}`;
+        const d = new Date(year, monthIndex - 1, i + 1);
+        const existing = previous.get(date);
+        return existing || {
+          date,
+          weekday: weekdays[d.getDay()],
+          rest: true,
+          start: "09:00",
+          end: "18:00",
+          note: ""
+        };
+      });
+    }
+
+    function activeEmployee() {
+      return state.employees.find((emp) => emp.id === state.activeId);
+    }
+
+    function load() {
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+      state.employees = Array.isArray(saved.employees) && saved.employees.length
+        ? saved.employees
+        : [{ id: uid(), name: "新员工", hourlyRate: 25, transportEnabled: false, transportAmount: 0, months: {} }];
+      state.activeId = saved.activeId && state.employees.some((emp) => emp.id === saved.activeId)
+        ? saved.activeId
+        : state.employees[0].id;
+      state.month = saved.month || monthNow();
+      readEmployeeMonth();
+    }
+
+    function persist() {
+      writeEmployeeMonth();
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        employees: state.employees,
+        activeId: state.activeId,
+        month: state.month
+      }));
+    }
+
+    function readEmployeeMonth() {
+      const emp = activeEmployee();
+      if (!emp.months) emp.months = {};
+      const monthRows = emp.months[state.month];
+      state.rows = Array.isArray(monthRows) ? monthRows : [];
+      makeRows(state.month);
+      el.employeeName.value = emp.name || "";
+      el.hourlyRate.value = emp.hourlyRate ?? 0;
+      el.transportEnabled.checked = Boolean(emp.transportEnabled);
+      el.transportAmount.value = emp.transportAmount ?? 0;
+      el.monthInput.value = state.month;
+    }
+
+    function writeEmployeeMonth() {
+      const emp = activeEmployee();
+      if (!emp) return;
+      emp.name = el.employeeName.value.trim() || "未命名员工";
+      emp.hourlyRate = numberValue(el.hourlyRate.value);
+      emp.transportEnabled = el.transportEnabled.checked;
+      emp.transportAmount = numberValue(el.transportAmount.value);
+      if (!emp.months) emp.months = {};
+      emp.months[state.month] = state.rows;
+    }
+
+    function renderEmployees() {
+      el.employeeSelect.innerHTML = state.employees
+        .map((emp) => `<option value="${emp.id}" ${emp.id === state.activeId ? "selected" : ""}>${escapeHtml(emp.name || "未命名员工")}</option>`)
+        .join("");
+    }
+
+    function renderTimePickers() {
+      for (const select of [el.bulkStart, el.bulkEnd]) {
+        select.innerHTML = times.map((time) => `<option value="${time}">${time}</option>`).join("");
+      }
+      el.bulkStart.value = "09:00";
+      el.bulkEnd.value = "18:00";
+    }
+
+    function renderRows() {
+      const rowsHtml = state.rows.map((row, index) => {
+        const calc = calcRow(row);
+        const d = new Date(row.date);
+        const weekend = d.getDay() === 0 || d.getDay() === 6;
+        return `<tr class="${row.rest ? "resting" : ""} ${weekend ? "weekend" : ""}">
+          <td><div class="date-cell">${row.date}</div><div class="weekday">${row.weekday}</div></td>
+          <td><input type="checkbox" data-index="${index}" data-field="rest" ${row.rest ? "checked" : ""} aria-label="${row.date} 休息"></td>
+          <td>${buildTimeSelect(row.start, index, "start")}</td>
+          <td>${buildTimeSelect(row.end, index, "end")}</td>
+          <td class="hours">${calc.hours.toFixed(1)}</td>
+          <td class="money">${money.format(calc.transport)}</td>
+          <td class="money">${money.format(calc.dayPay)}</td>
+          <td><input type="text" data-index="${index}" data-field="note" value="${escapeHtml(row.note || "")}" placeholder="备注"></td>
+        </tr>`;
+      }).join("");
+
+      el.timesheetBody.innerHTML = rowsHtml;
+      el.mobileList.innerHTML = state.rows.map((row, index) => {
+        const calc = calcRow(row);
+        return `<article class="day-card ${row.rest ? "resting" : ""}">
+          <div class="day-card-head">
+            <div>
+              <div class="day-card-title">${row.date}</div>
+              <div class="weekday">${row.weekday}</div>
+            </div>
+            <label class="checkline">
+              <input type="checkbox" data-index="${index}" data-field="rest" ${row.rest ? "checked" : ""}>
+              <span>休息</span>
+            </label>
+          </div>
+          <div class="day-grid">
+            <div class="field"><label>上班</label>${buildTimeSelect(row.start, index, "start")}</div>
+            <div class="field"><label>下班</label>${buildTimeSelect(row.end, index, "end")}</div>
+            <div class="field" style="grid-column: 1 / -1;"><label>备注</label><input type="text" data-index="${index}" data-field="note" value="${escapeHtml(row.note || "")}" placeholder="备注"></div>
+          </div>
+          <div class="day-total">
+            <span>${calc.hours.toFixed(1)} 小时</span>
+            <span>${money.format(calc.dayPay)}</span>
+          </div>
+        </article>`;
+      }).join("");
+    }
+
+    function renderSummary() {
+      const totals = state.rows.reduce((acc, row) => {
+        const calc = calcRow(row);
+        if (!row.rest && calc.hours > 0) acc.workDays += 1;
+        acc.hours += calc.hours;
+        acc.transport += calc.transport;
+        acc.pay += calc.dayPay;
+        return acc;
+      }, { workDays: 0, hours: 0, transport: 0, pay: 0 });
+
+      el.workDays.textContent = totals.workDays;
+      el.totalHours.textContent = totals.hours.toFixed(1);
+      el.transportTotal.textContent = money.format(totals.transport);
+      el.payTotal.textContent = money.format(totals.pay);
+      el.sheetTitle.textContent = `${el.employeeName.value || "员工"} · ${state.month} 排班明细`;
+    }
+
+    function render() {
+      renderEmployees();
+      renderRows();
+      renderSummary();
+      persist();
+    }
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, (char) => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        "\"": "&quot;",
+        "'": "&#39;"
+      }[char]));
+    }
+
+    function updateRow(target, shouldRender = true) {
+      const index = Number(target.dataset.index);
+      const field = target.dataset.field;
+      if (!Number.isInteger(index) || !field) return;
+      state.rows[index][field] = field === "rest" ? target.checked : target.value;
+      if (shouldRender) {
+        render();
+      } else {
+        renderSummary();
+        persist();
+      }
+    }
+
+    function addEmployee() {
+      writeEmployeeMonth();
+      const emp = { id: uid(), name: el.employeeName.value.trim() || "新员工", hourlyRate: numberValue(el.hourlyRate.value) || 25, transportEnabled: el.transportEnabled.checked, transportAmount: numberValue(el.transportAmount.value), months: {} };
+      state.employees.push(emp);
+      state.activeId = emp.id;
+      state.rows = [];
+      readEmployeeMonth();
+      render();
+    }
+
+    function deleteEmployee() {
+      if (state.employees.length === 1) {
+        alert("至少保留一个员工。");
+        return;
+      }
+      const emp = activeEmployee();
+      if (!confirm(`确定删除 ${emp.name || "该员工"} 吗？`)) return;
+      state.employees = state.employees.filter((item) => item.id !== state.activeId);
+      state.activeId = state.employees[0].id;
+      readEmployeeMonth();
+      render();
+    }
+
+    function fillWorkdays() {
+      state.rows = state.rows.map((row) => {
+        const day = new Date(row.date).getDay();
+        const weekend = day === 0 || day === 6;
+        if (weekend) return { ...row, rest: true };
+        return { ...row, rest: false, start: el.bulkStart.value, end: el.bulkEnd.value };
+      });
+      render();
+    }
+
+    function clearMonth() {
+      state.rows = state.rows.map((row) => ({ ...row, rest: true }));
+      render();
+    }
+
+    function exportExcel() {
+      writeEmployeeMonth();
+      const emp = activeEmployee();
+      const rows = state.rows.map((row) => {
+        const calc = calcRow(row);
+        return {
+          date: row.date,
+          weekday: row.weekday,
+          status: row.rest ? "休息" : "出勤",
+          start: row.rest ? "" : row.start,
+          end: row.rest ? "" : row.end,
+          hours: calc.hours.toFixed(1),
+          hourlyRate: numberValue(el.hourlyRate.value).toFixed(2),
+          transport: calc.transport.toFixed(2),
+          dayPay: calc.dayPay.toFixed(2),
+          note: row.note || ""
+        };
+      });
+      const totals = rows.reduce((acc, row) => {
+        if (row.status === "出勤" && Number(row.hours) > 0) acc.days += 1;
+        acc.hours += Number(row.hours);
+        acc.transport += Number(row.transport);
+        acc.pay += Number(row.dayPay);
+        return acc;
+      }, { days: 0, hours: 0, transport: 0, pay: 0 });
+
+      const html = `<!doctype html><html><head><meta charset="utf-8"></head><body>
+        <table border="1">
+          <tr><th colspan="10">${escapeHtml(emp.name)} ${state.month} 小时工工资表</th></tr>
+          <tr><td>员工</td><td>${escapeHtml(emp.name)}</td><td>月份</td><td>${state.month}</td><td>时薪</td><td>${numberValue(el.hourlyRate.value).toFixed(2)}</td><td>交通补贴</td><td colspan="3">${el.transportEnabled.checked ? numberValue(el.transportAmount.value).toFixed(2) : "未启用"}</td></tr>
+          <tr><td>出勤天数</td><td>${totals.days}</td><td>总工时</td><td>${totals.hours.toFixed(1)}</td><td>补贴合计</td><td>${totals.transport.toFixed(2)}</td><td>工资合计</td><td colspan="3">${totals.pay.toFixed(2)}</td></tr>
+          <tr><th>日期</th><th>星期</th><th>状态</th><th>上班</th><th>下班</th><th>工时</th><th>时薪</th><th>交通补贴</th><th>当日工资</th><th>备注</th></tr>
+          ${rows.map((row) => `<tr><td>${row.date}</td><td>${row.weekday}</td><td>${row.status}</td><td>${row.start}</td><td>${row.end}</td><td>${row.hours}</td><td>${row.hourlyRate}</td><td>${row.transport}</td><td>${row.dayPay}</td><td>${escapeHtml(row.note)}</td></tr>`).join("")}
+        </table>
+      </body></html>`;
+
+      const blob = new Blob(["\ufeff", html], { type: "application/vnd.ms-excel;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${emp.name || "员工"}-${state.month}-工资表.xls`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    function bind() {
+      document.addEventListener("change", (event) => {
+        if (event.target.matches("[data-index][data-field]")) updateRow(event.target);
+      });
+      document.addEventListener("input", (event) => {
+        if (event.target.matches("[data-index][data-field='note']")) updateRow(event.target, false);
+        if ([el.employeeName, el.hourlyRate, el.transportAmount].includes(event.target)) renderSummary();
+      });
+      el.employeeSelect.addEventListener("change", () => {
+        writeEmployeeMonth();
+        state.activeId = el.employeeSelect.value;
+        readEmployeeMonth();
+        render();
+      });
+      el.monthInput.addEventListener("change", () => {
+        writeEmployeeMonth();
+        state.month = el.monthInput.value || monthNow();
+        readEmployeeMonth();
+        render();
+      });
+      el.transportEnabled.addEventListener("change", render);
+      el.transportAmount.addEventListener("change", render);
+      el.hourlyRate.addEventListener("change", render);
+      el.employeeName.addEventListener("change", render);
+      el.saveEmployeeBtn.addEventListener("click", addEmployee);
+      el.deleteEmployeeBtn.addEventListener("click", deleteEmployee);
+      el.fillWorkdaysBtn.addEventListener("click", fillWorkdays);
+      el.clearRestBtn.addEventListener("click", clearMonth);
+      el.exportBtn.addEventListener("click", exportExcel);
+    }
+
+    load();
+    renderTimePickers();
+    bind();
+    render();
+  </script>
+</body>
+</html>
