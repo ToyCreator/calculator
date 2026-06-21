@@ -578,9 +578,9 @@
         return existing || {
           date,
           weekday: weekdays[d.getDay()],
-          rest: true,
-          start: "09:00",
-          end: "18:00",
+          rest: false,
+          start: "07:00",
+          end: "16:00",
           note: ""
         };
       });
@@ -645,8 +645,8 @@
       for (const select of [el.bulkStart, el.bulkEnd]) {
         select.innerHTML = times.map((time) => `<option value="${time}">${time}</option>`).join("");
       }
-      el.bulkStart.value = "09:00";
-      el.bulkEnd.value = "18:00";
+      el.bulkStart.value = "07:00";
+      el.bulkEnd.value = "16:00";
     }
 
     function renderRows() {
@@ -765,9 +765,6 @@
 
     function fillWorkdays() {
       state.rows = state.rows.map((row) => {
-        const day = new Date(row.date).getDay();
-        const weekend = day === 0 || day === 6;
-        if (weekend) return { ...row, rest: true };
         return { ...row, rest: false, start: el.bulkStart.value, end: el.bulkEnd.value };
       });
       render();
@@ -776,6 +773,196 @@
     function clearMonth() {
       state.rows = state.rows.map((row) => ({ ...row, rest: true }));
       render();
+    }
+
+    function escapeXml(value) {
+      return String(value).replace(/[<>&"']/g, (char) => ({
+        "<": "&lt;",
+        ">": "&gt;",
+        "&": "&amp;",
+        "\"": "&quot;",
+        "'": "&apos;"
+      }[char]));
+    }
+
+    function columnName(index) {
+      let name = "";
+      let current = index;
+      while (current > 0) {
+        const remainder = (current - 1) % 26;
+        name = String.fromCharCode(65 + remainder) + name;
+        current = Math.floor((current - 1) / 26);
+      }
+      return name;
+    }
+
+    function crc32(bytes) {
+      if (!crc32.table) {
+        crc32.table = Array.from({ length: 256 }, (_, n) => {
+          let c = n;
+          for (let k = 0; k < 8; k += 1) {
+            c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+          }
+          return c >>> 0;
+        });
+      }
+      let crc = 0xffffffff;
+      for (const byte of bytes) {
+        crc = crc32.table[(crc ^ byte) & 0xff] ^ (crc >>> 8);
+      }
+      return (crc ^ 0xffffffff) >>> 0;
+    }
+
+    function writeUint16(value) {
+      return [value & 0xff, (value >>> 8) & 0xff];
+    }
+
+    function writeUint32(value) {
+      return [value & 0xff, (value >>> 8) & 0xff, (value >>> 16) & 0xff, (value >>> 24) & 0xff];
+    }
+
+    function makeZip(files) {
+      const encoder = new TextEncoder();
+      const localParts = [];
+      const centralParts = [];
+      let offset = 0;
+
+      Object.entries(files).forEach(([path, content]) => {
+        const nameBytes = encoder.encode(path);
+        const data = encoder.encode(content);
+        const crc = crc32(data);
+        const localHeader = new Uint8Array([
+          ...writeUint32(0x04034b50),
+          ...writeUint16(20),
+          ...writeUint16(0),
+          ...writeUint16(0),
+          ...writeUint16(0),
+          ...writeUint16(0),
+          ...writeUint32(crc),
+          ...writeUint32(data.length),
+          ...writeUint32(data.length),
+          ...writeUint16(nameBytes.length),
+          ...writeUint16(0)
+        ]);
+        localParts.push(localHeader, nameBytes, data);
+
+        const centralHeader = new Uint8Array([
+          ...writeUint32(0x02014b50),
+          ...writeUint16(20),
+          ...writeUint16(20),
+          ...writeUint16(0),
+          ...writeUint16(0),
+          ...writeUint16(0),
+          ...writeUint16(0),
+          ...writeUint32(crc),
+          ...writeUint32(data.length),
+          ...writeUint32(data.length),
+          ...writeUint16(nameBytes.length),
+          ...writeUint16(0),
+          ...writeUint16(0),
+          ...writeUint16(0),
+          ...writeUint16(0),
+          ...writeUint32(0),
+          ...writeUint32(offset)
+        ]);
+        centralParts.push(centralHeader, nameBytes);
+        offset += localHeader.length + nameBytes.length + data.length;
+      });
+
+      const centralSize = centralParts.reduce((sum, part) => sum + part.length, 0);
+      const endRecord = new Uint8Array([
+        ...writeUint32(0x06054b50),
+        ...writeUint16(0),
+        ...writeUint16(0),
+        ...writeUint16(Object.keys(files).length),
+        ...writeUint16(Object.keys(files).length),
+        ...writeUint32(centralSize),
+        ...writeUint32(offset),
+        ...writeUint16(0)
+      ]);
+
+      return new Blob([...localParts, ...centralParts, endRecord], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      });
+    }
+
+    function xlsxCell(value, rowIndex, columnIndex, style = 0) {
+      const ref = `${columnName(columnIndex)}${rowIndex}`;
+      const styleAttr = style ? ` s="${style}"` : "";
+      if (typeof value === "number") {
+        return `<c r="${ref}"${styleAttr}><v>${value}</v></c>`;
+      }
+      return `<c r="${ref}" t="inlineStr"${styleAttr}><is><t>${escapeXml(value)}</t></is></c>`;
+    }
+
+    function buildSheetXml(sheetRows) {
+      const rowsXml = sheetRows.map((row, rowIndex) => {
+        const excelRow = rowIndex + 1;
+        const cells = row.map((cell, columnIndex) => {
+          const normalized = typeof cell === "object" && cell !== null ? cell : { value: cell };
+          return xlsxCell(normalized.value ?? "", excelRow, columnIndex + 1, normalized.style || 0);
+        }).join("");
+        return `<row r="${excelRow}">${cells}</row>`;
+      }).join("");
+
+      return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <cols>
+    <col min="1" max="1" width="13" customWidth="1"/>
+    <col min="2" max="3" width="10" customWidth="1"/>
+    <col min="4" max="5" width="11" customWidth="1"/>
+    <col min="6" max="9" width="12" customWidth="1"/>
+    <col min="10" max="10" width="18" customWidth="1"/>
+  </cols>
+  <sheetData>${rowsXml}</sheetData>
+</worksheet>`;
+    }
+
+    function createXlsxBlob(sheetRows) {
+      const files = {
+        "[Content_Types].xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+  <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+</Types>`,
+        "_rels/.rels": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>`,
+        "xl/workbook.xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <sheets>
+    <sheet name="工资表" sheetId="1" r:id="rId1"/>
+  </sheets>
+</workbook>`,
+        "xl/_rels/workbook.xml.rels": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+</Relationships>`,
+        "xl/styles.xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <fonts count="2">
+    <font><sz val="11"/><name val="Arial"/></font>
+    <font><b/><sz val="11"/><name val="Arial"/></font>
+  </fonts>
+  <fills count="2">
+    <fill><patternFill patternType="none"/></fill>
+    <fill><patternFill patternType="gray125"/></fill>
+  </fills>
+  <borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>
+  <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+  <cellXfs count="2">
+    <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
+    <xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/>
+  </cellXfs>
+</styleSheet>`,
+        "xl/worksheets/sheet1.xml": buildSheetXml(sheetRows)
+      };
+      return makeZip(files);
     }
 
     function exportExcel() {
@@ -804,21 +991,30 @@
         return acc;
       }, { days: 0, hours: 0, transport: 0, pay: 0 });
 
-      const html = `<!doctype html><html><head><meta charset="utf-8"></head><body>
-        <table border="1">
-          <tr><th colspan="10">${escapeHtml(emp.name)} ${state.month} 小时工工资表</th></tr>
-          <tr><td>员工</td><td>${escapeHtml(emp.name)}</td><td>月份</td><td>${state.month}</td><td>时薪</td><td>${numberValue(el.hourlyRate.value).toFixed(2)}</td><td>交通补贴</td><td colspan="3">${el.transportEnabled.checked ? numberValue(el.transportAmount.value).toFixed(2) : "未启用"}</td></tr>
-          <tr><td>出勤天数</td><td>${totals.days}</td><td>总工时</td><td>${totals.hours.toFixed(1)}</td><td>补贴合计</td><td>${totals.transport.toFixed(2)}</td><td>工资合计</td><td colspan="3">${totals.pay.toFixed(2)}</td></tr>
-          <tr><th>日期</th><th>星期</th><th>状态</th><th>上班</th><th>下班</th><th>工时</th><th>时薪</th><th>交通补贴</th><th>当日工资</th><th>备注</th></tr>
-          ${rows.map((row) => `<tr><td>${row.date}</td><td>${row.weekday}</td><td>${row.status}</td><td>${row.start}</td><td>${row.end}</td><td>${row.hours}</td><td>${row.hourlyRate}</td><td>${row.transport}</td><td>${row.dayPay}</td><td>${escapeHtml(row.note)}</td></tr>`).join("")}
-        </table>
-      </body></html>`;
+      const sheetRows = [
+        [{ value: `${emp.name} ${state.month} 小时工工资表`, style: 1 }],
+        ["员工", emp.name, "月份", state.month, "时薪", numberValue(el.hourlyRate.value), "交通补贴", el.transportEnabled.checked ? numberValue(el.transportAmount.value) : "未启用"],
+        ["出勤天数", totals.days, "总工时", Number(totals.hours.toFixed(1)), "补贴合计", Number(totals.transport.toFixed(2)), "工资合计", Number(totals.pay.toFixed(2))],
+        ["日期", "星期", "状态", "上班", "下班", "工时", "时薪", "交通补贴", "当日工资", "备注"].map((value) => ({ value, style: 1 })),
+        ...rows.map((row) => [
+          row.date,
+          row.weekday,
+          row.status,
+          row.start,
+          row.end,
+          Number(row.hours),
+          Number(row.hourlyRate),
+          Number(row.transport),
+          Number(row.dayPay),
+          row.note
+        ])
+      ];
 
-      const blob = new Blob(["\ufeff", html], { type: "application/vnd.ms-excel;charset=utf-8" });
+      const blob = createXlsxBlob(sheetRows);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${emp.name || "员工"}-${state.month}-工资表.xls`;
+      a.download = `${emp.name || "员工"}-${state.month}-工资表.xlsx`;
       document.body.appendChild(a);
       a.click();
       a.remove();
